@@ -94,12 +94,11 @@ for index, item in enumerate(genotype_matrix):
 
 genotype_np_array = np.array([np.array(xi) for xi in genotype_matrix[0:args.Nsnps]])
 
-
 gen_array = genotype_np_array.transpose()
+print(gen_array)
 
-gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring(), axis=1,arr=gen_array)
-
-
+gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring().decode('utf-8'), axis=1,arr=gen_array)
+print(gen_array_seq)
 
 with open(args.sites, 'w') as sites_out:
 	sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
