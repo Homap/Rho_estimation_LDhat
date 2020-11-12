@@ -44,19 +44,45 @@ program_descripton = f'''
 	'''
 
 parser = ArgumentParser(description=program_descripton, formatter_class=RawFormatter)
-#requiredNamed = parser.add_argument_group('required named arguments')
 parser.add_argument('vcf', help='gzipped VCF')
+parser.add_argument('bed', help='scaffold length file in bed format')
 parser.add_argument('Nsnps', help='number of SNPs', type=int)
 parser.add_argument('chr', help='chromosome or scaffold', type=str)
-parser.add_argument('sites', help='sites output file', type=str)
-parser.add_argument('locs', help='locs output file', type=str)
 
 args = parser.parse_args()
 
 #**********************************************************************************
+def slidingWindow(sequence_l, winSize, step):
+	""" Returns a generator that will iterate through
+	the defined chunks of input sequence. Input
+	sequence must be iterable."""
+
+	# Verify the inputs
+	if not ((type(winSize) == type(0)) and (type(step) == type(0))):
+		raise Exception("**ERROR** type(winSize) and type(step) must be int.")
+	if step > winSize:
+		raise Exception("**ERROR** step cannot be larger than winSize.")
+	if winSize > sequence_l:
+		pass
+	# Pre-compute number of chunks to emit
+	numOfChunks = ((int(sequence_l-winSize)/step))+1
+	numOfChunks = int(numOfChunks) 
+
+	for i in range(0, numOfChunks*step, step):
+		yield i,i+winSize
+
 def chunks(s, n):
 	for start in range(0, len(s), n):
 		yield s[start:start+n]
+#**********************************************************************************
+# Read scaffold length file into a dictionary
+scaf_len = {}
+with open(args.bed, 'r') as lenfile:
+	next(lenfile)
+	for line in lenfile:
+		line = line.rstrip().split()
+		scaf_len[line[0]] = int(line[2]) - int(line[1])
+# print(scaf_len)
 #**********************************************************************************
 # Parse the genotype field
 genotype_matrix = []
@@ -73,45 +99,64 @@ with io.TextIOWrapper(gzip.open(args.vcf, 'r')) as vcf_file:
 				genotype_fields = line[9:]
 				genotype_matrix.append(genotype_fields)
 
-for index, item in enumerate(genotype_matrix):
-	if index < args.Nsnps: 
-		for index_ind, item_ind in enumerate(item):
-			genotype = genotype_matrix[index][index_ind].split(":")[0]
-			if genotype == "0/1":
-				genotype_matrix[index][index_ind] = '2'
-			elif genotype == "1/0":
-				genotype_matrix[index][index_ind] = '2'
-			elif genotype == "0/0":
-				genotype_matrix[index][index_ind] = '0'
-			elif genotype == "1/1":
-				genotype_matrix[index][index_ind] = '1'
-			elif genotype == "./.":
-				genotype_matrix[index][index_ind] = '?'
-			else:
-				raise Exception("Genotype field contains incorrect notation!")
-	else:
-		break
-
-genotype_np_array = np.array([np.array(xi) for xi in genotype_matrix[0:args.Nsnps]])
-
-gen_array = genotype_np_array.transpose()
-print(gen_array)
-
-gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring().decode('utf-8'), axis=1,arr=gen_array)
-print(gen_array_seq)
-
-with open(args.sites, 'w') as sites_out:
-	sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
-	for index, ind in enumerate(gen_array_seq):
-		sites_out.write(">"+sample_names[index]+"\n")
-		for seq in chunks(gen_array_seq[index], args.Nsnps):
-			sites_out.write(seq+"\n")
-
 relative_geno = [str(int(pos) - int(geno_position[0]) + 1) for pos in geno_position]
+# print(relative_geno)
+# Create list of windows
+windows = slidingWindow(len(genotype_matrix), args.Nsnps, args.Nsnps-5)
+# for i in windows: print(i)
 
-L = int(geno_position[args.Nsnps]) - int(geno_position[0]) + 1
-with open(args.locs, 'w') as locs_out:
-	locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+" ".join(relative_geno[0:args.Nsnps])+"\n")
+interval_counter = 0
+for interval in windows:
+	# print(interval)
+	start = list(interval)[0]
+	end = list(interval)[1]
+	# print(start, end)
+	for index, item in enumerate(genotype_matrix):
+		index = index + start
+		# print("INDEX", index)
+		if start <= index <= end: 
+			for index_ind, item_ind in enumerate(item):
+				genotype = genotype_matrix[index][index_ind].split(":")[0]
+				if genotype == "0/1" or genotype == "2":
+					genotype_matrix[index][index_ind] = '2'
+				elif genotype == "1/0" or genotype == "2":
+					genotype_matrix[index][index_ind] = '2'
+				elif genotype == "0/0" or genotype == "0":
+					genotype_matrix[index][index_ind] = '0'
+				elif genotype == "1/1" or genotype == "1":
+					genotype_matrix[index][index_ind] = '1'
+				elif genotype == "./.":
+					genotype_matrix[index][index_ind] = '?'
+				else:
+					raise Exception("Genotype field contains incorrect notation!")
+		else:
+			break
+
+	genotype_np_array = np.array([np.array(xi) for xi in genotype_matrix[start:end]])
+	# print("1", genotype_np_array)
+
+	gen_array = genotype_np_array.transpose()
+	# print("2", gen_array)
+
+	gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring().decode('utf-8'), axis=1,arr=gen_array)
+	# print("3", gen_array_seq)
+
+	interval_counter += 1
+	sites = args.chr + ":" + str(interval_counter) + "_" + str(start) + ":" + str(end) + ".sites.txt"
+	# print(outname)
+	with open(sites, 'w') as sites_out:
+		sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
+		for index, ind in enumerate(gen_array_seq):
+			sites_out.write(">"+sample_names[index]+"\n")
+			for seq in chunks(gen_array_seq[index], args.Nsnps):
+				sites_out.write(seq+"\n")
+
+	L = int(geno_position[end]) - int(geno_position[start]) + 1
+	# print(L)
+	locs = args.chr + ":" + str(interval_counter) + "_" + str(start) + ":" + str(end) + ".locs.txt"
+	with open(locs, 'w') as locs_out:
+		new_coord = [str(int(coord) - int(relative_geno[start]) + 1) for coord in relative_geno[start:end]]
+		locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+" ".join(new_coord)+"\n")
 
 
 
