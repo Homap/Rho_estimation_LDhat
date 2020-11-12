@@ -99,7 +99,7 @@ with io.TextIOWrapper(gzip.open(args.vcf, 'r')) as vcf_file:
 				genotype_fields = line[9:]
 				genotype_matrix.append(genotype_fields)
 
-relative_geno = [str(int(pos) - int(geno_position[0]) + 1) for pos in geno_position]
+# relative_geno = [str(int(pos) - int(geno_position[0]) + 1) for pos in geno_position]
 # print(relative_geno)
 # Create list of windows
 windows = slidingWindow(len(genotype_matrix), args.Nsnps, args.Nsnps-5)
@@ -142,7 +142,7 @@ for interval in windows:
 	# print("3", gen_array_seq)
 
 	interval_counter += 1
-	sites = args.chr + ":" + str(interval_counter) + "_" + str(start) + ":" + str(end) + ".sites.txt"
+	sites = args.chr + ":" + str(interval_counter) + ".sites.txt"
 	# print(outname)
 	with open(sites, 'w') as sites_out:
 		sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
@@ -153,10 +153,14 @@ for interval in windows:
 
 	L = int(geno_position[end]) - int(geno_position[start]) + 1
 	# print(L)
-	locs = args.chr + ":" + str(interval_counter) + "_" + str(start) + ":" + str(end) + ".locs.txt"
+	locs = args.chr + ":" + str(interval_counter) + ".locs.txt"
 	with open(locs, 'w') as locs_out:
-		new_coord = [str(int(coord) - int(relative_geno[start]) + 1) for coord in relative_geno[start:end]]
-		locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+" ".join(new_coord)+"\n")
+		new_coord = [str(int(coord) - int(geno_position[start]) + 1) for coord in geno_position[start:end]]
+		locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(new_coord)+"\n")
+
+	original_pos = args.chr + ":" + str(interval_counter) + ".pos.txt"
+	with open(original_pos, 'w') as pos_out:
+		pos_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(geno_position[start:end])+"\n")
 
 
 
