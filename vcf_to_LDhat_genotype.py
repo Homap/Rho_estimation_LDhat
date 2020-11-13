@@ -5,7 +5,8 @@ import io
 import textwrap
 import argparse
 from argparse import ArgumentParser, HelpFormatter
-
+import subprocess
+from subprocess import Popen, PIPE, STDOUT
 
 class RawFormatter(HelpFormatter):
 	def _fill_text(self, text, width, indent):
@@ -162,7 +163,11 @@ for interval in windows:
 	with open(original_pos, 'w') as pos_out:
 		pos_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(geno_position[start:end])+"\n")
 
-
+	print("Running LDhat")
+	ldhat_out = args.chr + ":" + str(interval_counter) + ".ldhat"
+	cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
+	print(cmd)
+	p = subprocess.Popen(cmd).communicate()
 
 
 
