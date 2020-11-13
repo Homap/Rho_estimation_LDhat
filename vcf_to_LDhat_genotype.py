@@ -7,6 +7,8 @@ import argparse
 from argparse import ArgumentParser, HelpFormatter
 import subprocess
 from subprocess import Popen, PIPE, STDOUT
+import pandas as pd
+import matplotlib.pyplot as plt
 
 class RawFormatter(HelpFormatter):
 	def _fill_text(self, text, width, indent):
@@ -49,6 +51,7 @@ parser.add_argument('vcf', help='gzipped VCF')
 parser.add_argument('bed', help='scaffold length file in bed format')
 parser.add_argument('Nsnps', help='number of SNPs', type=int)
 parser.add_argument('chr', help='chromosome or scaffold', type=str)
+parser.add_argument('Nwin', help='number of windows', type=int)
 
 args = parser.parse_args()
 
@@ -107,67 +110,82 @@ windows = slidingWindow(len(genotype_matrix), args.Nsnps, args.Nsnps-5)
 # for i in windows: print(i)
 
 interval_counter = 0
-for interval in windows:
+for interval_index, interval in enumerate(windows):
 	# print(interval)
-	start = list(interval)[0]
-	end = list(interval)[1]
-	# print(start, end)
-	for index, item in enumerate(genotype_matrix):
-		index = index + start
-		# print("INDEX", index)
-		if start <= index <= end: 
-			for index_ind, item_ind in enumerate(item):
-				genotype = genotype_matrix[index][index_ind].split(":")[0]
-				if genotype == "0/1" or genotype == "2":
-					genotype_matrix[index][index_ind] = '2'
-				elif genotype == "1/0" or genotype == "2":
-					genotype_matrix[index][index_ind] = '2'
-				elif genotype == "0/0" or genotype == "0":
-					genotype_matrix[index][index_ind] = '0'
-				elif genotype == "1/1" or genotype == "1":
-					genotype_matrix[index][index_ind] = '1'
-				elif genotype == "./.":
-					genotype_matrix[index][index_ind] = '?'
-				else:
-					raise Exception("Genotype field contains incorrect notation!")
-		else:
-			break
+	if interval_index < args.Nwin:
+		start = list(interval)[0]
+		end = list(interval)[1]
+		# print(start, end)
+		for index, item in enumerate(genotype_matrix):
+			index = index + start
+			# print("INDEX", index)
+			if start <= index <= end: 
+				for index_ind, item_ind in enumerate(item):
+					genotype = genotype_matrix[index][index_ind].split(":")[0]
+					if genotype == "0/1" or genotype == "2":
+						genotype_matrix[index][index_ind] = '2'
+					elif genotype == "1/0" or genotype == "2":
+						genotype_matrix[index][index_ind] = '2'
+					elif genotype == "0/0" or genotype == "0":
+						genotype_matrix[index][index_ind] = '0'
+					elif genotype == "1/1" or genotype == "1":
+						genotype_matrix[index][index_ind] = '1'
+					elif genotype == "./.":
+						genotype_matrix[index][index_ind] = '?'
+					else:
+						raise Exception("Genotype field contains incorrect notation!")
+			else:
+				break
 
-	genotype_np_array = np.array([np.array(xi) for xi in genotype_matrix[start:end]])
-	# print("1", genotype_np_array)
+		genotype_np_array = np.array([np.array(xi) for xi in genotype_matrix[start:end]])
+		# print("1", genotype_np_array)
 
-	gen_array = genotype_np_array.transpose()
-	# print("2", gen_array)
+		gen_array = genotype_np_array.transpose()
+		# print("2", gen_array)
 
-	gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring().decode('utf-8'), axis=1,arr=gen_array)
-	# print("3", gen_array_seq)
+		gen_array_seq = np.apply_along_axis(lambda row: row.astype('|S1').tostring().decode('utf-8'), axis=1,arr=gen_array)
+		# print("3", gen_array_seq)
 
-	interval_counter += 1
-	sites = args.chr + ":" + str(interval_counter) + ".sites.txt"
-	# print(outname)
-	with open(sites, 'w') as sites_out:
-		sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
-		for index, ind in enumerate(gen_array_seq):
-			sites_out.write(">"+sample_names[index]+"\n")
-			for seq in chunks(gen_array_seq[index], args.Nsnps):
-				sites_out.write(seq+"\n")
+		interval_counter += 1
+		sites = args.chr + ":" + str(interval_counter) + ".sites.txt"
+		# print(outname)
+		with open(sites, 'w') as sites_out:
+			sites_out.write(str(gen_array.shape[0])+" "+str(gen_array.shape[1])+" "+"2"+"\n")
+			for index, ind in enumerate(gen_array_seq):
+				sites_out.write(">"+sample_names[index]+"\n")
+				for seq in chunks(gen_array_seq[index], args.Nsnps):
+					sites_out.write(seq+"\n")
 
-	L = int(geno_position[end]) - int(geno_position[start]) + 1
-	# print(L)
-	locs = args.chr + ":" + str(interval_counter) + ".locs.txt"
-	with open(locs, 'w') as locs_out:
-		new_coord = [str(int(coord) - int(geno_position[start]) + 1) for coord in geno_position[start:end]]
-		locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(new_coord)+"\n")
+		L = int(geno_position[end]) - int(geno_position[start]) + 1
+		# print(L)
+		locs = args.chr + ":" + str(interval_counter) + ".locs.txt"
+		with open(locs, 'w') as locs_out:
+			new_coord = [str(int(coord) - int(geno_position[start]) + 1) for coord in geno_position[start:end]]
+			locs_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(new_coord)+"\n")
 
-	original_pos = args.chr + ":" + str(interval_counter) + ".pos.txt"
-	with open(original_pos, 'w') as pos_out:
-		pos_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(geno_position[start:end])+"\n")
+		original_pos = args.chr + ":" + str(interval_counter) + ".pos.txt"
+		with open(original_pos, 'w') as pos_out:
+			pos_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(geno_position[start:end])+"\n")
 
-	print("Running LDhat")
-	ldhat_out = args.chr + ":" + str(interval_counter) + ".ldhat"
-	cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
-	print(cmd)
-	p = subprocess.Popen(cmd).communicate()
+		print("Running LDhat")
+		ldhat_out = args.chr + ":" + str(interval_counter) + ".ldhat."
+		cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
+		print(cmd)
+		p = subprocess.Popen(cmd).communicate()
+
+		print("Plotting Composite-likelihood as a function of 4Ner")
+
+		composite_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "outfile.txt"
+		composite_png = args.chr + "_" + str(interval_counter) + ".png"
+		outfile = pd.read_table(composite_out, \
+		skip_blank_lines=True, skipinitialspace=True, sep='\s+',\
+		skiprows=lambda x: x in [0, 1, 2, 3, 4, 5])
+
+		plt.figure()
+		plt.plot(outfile['4Ner(region)'], outfile['Pairwise'])
+		plt.xlabel('4Ner (region)')
+		plt.ylabel('Composite-likelihood')
+		plt.savefig(composite_png)
 
 
 
