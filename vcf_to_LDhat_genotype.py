@@ -187,6 +187,35 @@ for interval_index, interval in enumerate(windows):
 		plt.ylabel('Composite-likelihood')
 		plt.savefig(composite_png)
 
+		rmin_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "rmin.txt"
+		rmin_png = args.chr + "_" + str(interval_counter) + ".png"
+		rmin_file = open(rmin_out, "r")
+		rmin = rmin_out.readlines()[5:]
+		# Create a list of lower diagonal
+		lower_diagonal = [0.000000]
+		for index, line in enumerate(rmin):
+			if index == 0:
+				pass
+			else:
+				line = line.rstrip().split()
+				if index == int(line[0].replace(":", "")) - 1:
+					new_list = line[1:index+1]
+					new_list.append('0')
+					for element in new_list:
+						lower_diagonal.append(float(element))
+		# Build the whole matrix
+		n = args.Nsnps - 1
+		mat = np.zeros((n,n)) # Initialize nxn matrix 
+		# Find lower left indices of a triangular nxn matrix
+		tril = np.tril_indices(n)
+		# Find upper right indices of a triangular nxn matrix 
+		triu = np.triu_indices(n, 1)
+		mat[tril] = lower_diagonal
+		# Make the matrix symmetric
+		mat[triu] = mat.T[triu]
+		ax = sns.heatmap(mat)
+		fig = ax.get_figure()
+		fig.savefig(rmin_png)
 
 
 
