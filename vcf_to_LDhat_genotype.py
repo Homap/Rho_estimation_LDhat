@@ -9,6 +9,7 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import pandas as pd
 import matplotlib.pyplot as plt
+# import seaborn as sns
 
 class RawFormatter(HelpFormatter):
 	def _fill_text(self, text, width, indent):
@@ -189,8 +190,9 @@ for interval_index, interval in enumerate(windows):
 
 		rmin_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "rmin.txt"
 		rmin_png = args.chr + "_" + str(interval_counter) + ".png"
+		pairwise_rmin_out = args.chr + "_" + str(interval_counter) + ".pairwise.rmin.txt"
 		rmin_file = open(rmin_out, "r")
-		rmin = rmin_out.readlines()[5:]
+		rmin = rmin_file.readlines()[5:]
 		# Create a list of lower diagonal
 		lower_diagonal = [0.000000]
 		for index, line in enumerate(rmin):
@@ -213,9 +215,18 @@ for interval_index, interval in enumerate(windows):
 		mat[tril] = lower_diagonal
 		# Make the matrix symmetric
 		mat[triu] = mat.T[triu]
-		ax = sns.heatmap(mat)
-		fig = ax.get_figure()
-		fig.savefig(rmin_png)
+		# ax = sns.heatmap(mat)
+		# fig = ax.get_figure()
+		# fig.savefig(rmin_png)
+		with open(pairwise_rmin_out, "w") as pairwise_rmin_out_file:
+			pairwise_rmin_out_file.write("chr"+"\t"+"snp1"+"\t"+"snp2"+"\t"+"\t"+"snp1_pos"+"\t"+"snp2_pos"+"\t"+"rho"+"\n")
+			for snppair in zip(triu[0], triu[1]):
+				snp1 = "SNP." + str(snppair[0] + 1)
+				snp2 = "SNP." + str(snppair[1] + 1)
+				snp1_original_pos = geno_position[snppair[0]]
+				snp2_original_pos = geno_position[snppair[1]]
+				pairwise_rmin_out_file.write(args.chr+"\t"+snp1+"\t"+snp2+"\t"+snp1_original_pos+"\t"+snp2_original_pos+"\t"+str(mat[snppair])+"\n")
+				geno_position[start:end]
 
 
 
