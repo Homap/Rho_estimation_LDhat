@@ -228,8 +228,38 @@ for interval_index, interval in enumerate(windows):
 				pairwise_rmin_out_file.write(args.chr+"\t"+snp1+"\t"+snp2+"\t"+snp1_original_pos+"\t"+snp2_original_pos+"\t"+str(mat[snppair])+"\n")
 				geno_position[start:end]
 
+		window_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "window_out.txt"
+		window_png = args.chr + ":" + str(interval_counter) + ".window.png"
+		window_txt = args.chr + ":" + str(interval_counter) + ".originalPOS.window.txt"
+		with open(window_out, 'r') as w_file:
+			w = pd.read_table(w_file, \
+				skip_blank_lines=True, sep ="\t", skipinitialspace=True, \
+				skiprows=lambda x: x in [0, 1, 2])
 
+			w_no_na = w.dropna()
 
+			mid_position = (w_no_na["SNP_L"].astype(float)+w_no_na["SNP_R"])/2
+			mid = mid_position/1000
+			rho = w_no_na["4Ner/bp/kb"]
+
+			plt.figure()
+			plt.plot(mid, rho*1000)
+			plt.ylabel("4Ner/kb")
+			plt.xlabel("Position (kb)")
+			plt.savefig(window_png)
+
+			# Create a dictionary with new and original coordinates
+			new_coord_to_original = dict(zip(new_coord, geno_position))
+
+			original_snp_l = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_L"])]
+			original_snp_r = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_R"])]
+
+			w_no_na.insert(1, "SNP_L_POS", original_snp_l, True)
+			w_no_na.insert(3, "SNP_R_POS", original_snp_r, True)
+
+			# Saving dataframe as CSV
+			#with open(window_txt, "w") as df_out:
+			w_no_na.to_csv(window_txt, sep="\t", index = False)
 
 
 
