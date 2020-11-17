@@ -7,13 +7,13 @@ SNPs to extract from VCF and outputs the LDhat inputs, the sites and locs files.
 
 **sites file**  
 4 10 2  
->GenotypeA  
+\>GenotypeA  
 122110?000  
->GenotypeB  
+\>GenotypeB  
 1111201100  
->GenotypeC  
+\>GenotypeC  
 011111?112  
->GenotypeD  
+\>GenotypeD  
 2112210100  
   
 **locs file**  
