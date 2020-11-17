@@ -1,6 +1,6 @@
 # VCF to LDhat output
 
-usage: vcf_to_LDhat_genotype.py [-h] vcf bed Nsnps chr Nwin  
+usage: `vcf_to_LDhat_genotype.py [-h] vcf bed Nsnps chr Nwin`  
 
 Description: Take a gzipped VCF file as an input, the region and the number of  
 SNPs to extract from VCF and outputs the LDhat inputs, the sites and locs files.  
@@ -31,11 +31,11 @@ It then processes the Ldhat outputs to produce plots and dataframes needed for d
 analysis.  
 
 positional arguments:  
-  vcf         gzipped VCF
-  bed         scaffold length file in bed format
-  Nsnps       number of SNPs
-  chr         chromosome or scaffold
-  Nwin        number of windows
+  vcf         gzipped VCF  
+  bed         scaffold length file in bed format  
+  Nsnps       number of SNPs  
+  chr         chromosome or scaffold  
+  Nwin        number of windows  
 
-optional arguments:
-  -h, --help  show this help message and exit
+optional arguments:  
+  -h, --help  show this help message and exit  
