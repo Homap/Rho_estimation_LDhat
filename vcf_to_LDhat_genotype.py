@@ -12,11 +12,15 @@ import matplotlib.pyplot as plt
 import pexpect
 import sys
 from matplotlib.animation import FuncAnimation
+import math
 # import seaborn as sns
 
 class RawFormatter(HelpFormatter):
 	def _fill_text(self, text, width, indent):
 		return "\n".join([textwrap.fill(line, width) for line in textwrap.indent(textwrap.dedent(text), indent).splitlines()])
+
+plt.rcParams.update({'figure.max_open_warning': 0})
+
 
 program_descripton = f'''
 	Title: vcf_to_genotype_fasta.py
@@ -54,6 +58,7 @@ parser = ArgumentParser(description=program_descripton, formatter_class=RawForma
 parser.add_argument('vcf', help='gzipped VCF')
 parser.add_argument('bed', help='scaffold length file in bed format')
 parser.add_argument('Nsnps', help='number of SNPs', type=int)
+parser.add_argument('Noverlap', help='number of overlapping SNPs, Nsnps=50 and Noverlap=49, then there are 49 overlapping SNPs', type=int)
 parser.add_argument('chr', help='chromosome or scaffold', type=str)
 parser.add_argument('Nwin', help='number of windows', type=int)
 
@@ -110,8 +115,12 @@ with io.TextIOWrapper(gzip.open(args.vcf, 'r')) as vcf_file:
 # relative_geno = [str(int(pos) - int(geno_position[0]) + 1) for pos in geno_position]
 # print(relative_geno)
 # Create list of windows
-windows = slidingWindow(len(genotype_matrix), args.Nsnps, args.Nsnps-5)
+windows = slidingWindow(len(genotype_matrix), args.Nsnps, args.Nsnps-args.Noverlap)
 # for i in windows: print(i)
+
+rho_out = open("rho.txt", "w")
+print("chr"+"\t"+"SNP1_pos"+"\t"+"SNP2_pos"+"\t"+"length"+"\t"+"rho"+"\t"+"rho_per_site"+"\t"+"Lk")
+rho_out.write("chr"+"\t"+"SNP1_pos"+"\t"+"SNP2_pos"+"\t"+"length"+"\t"+"rho"+"\t"+"rho_per_site"+"\t"+"Lk"+"\n")
 
 interval_counter = 0
 for interval_index, interval in enumerate(windows):
@@ -171,7 +180,7 @@ for interval_index, interval in enumerate(windows):
 		with open(original_pos, 'w') as pos_out:
 			pos_out.write(str(gen_array.shape[1])+" "+str(L)+" "+ "L"+"\n"+"\n".join(geno_position[start:end])+"\n")
 
-		print("Running LDhat")
+		# print("Running LDhat")
 		ldhat_out = args.chr + ":" + str(interval_counter) + ".ldhat."
 		# cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
 		# # print(cmd)
@@ -182,23 +191,23 @@ for interval_index, interval in enumerate(windows):
 
 		# Add a timeout in case the script fails
 		ldhat_cmd.timeout = 60
-		print("running grid size question")
+		# print("running grid size question")
 		ldhat_cmd.expect('Do you wish to change grid over which to estimate likelihoods')
 		ldhat_cmd.sendline('0')
 
-		print("running sliding window question")
+		# print("running sliding window question")
 		ldhat_cmd.expect('Do you wish to carry out a sliding windows analysis')
 		ldhat_cmd.sendline('0')
 
-		print("running rmin full table")
+		# print("running rmin full table")
 		ldhat_cmd.expect('Full table')
 		ldhat_cmd.sendline('2')
 
-		print("running 4Ner method of moment question")
+		# print("running 4Ner method of moment question")
 		ldhat_cmd.expect('Estimate 4Ner by moment method')
 		ldhat_cmd.sendline('1')
 
-		print("Plotting Composite-likelihood as a function of 4Ner")
+		# print("Plotting Composite-likelihood as a function of 4Ner")
 
 		composite_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "outfile.txt"
 		composite_png = args.chr + "_" + str(interval_counter) + ".png"
@@ -217,9 +226,10 @@ for interval_index, interval in enumerate(windows):
 		for line in f:
 			if line.startswith("Maximum"):
 				line = line.rstrip()
-				lk = lk + line		
-		print("chr"+"\t"+"SNP1_pos"+"\t"+"SNP2_pos"+"\t"+"rho"+"\t"+"Lk")
-		print(args.chr, geno_position[start], geno_position[end], lk.split()[4], lk.split()[8])
+				lk = lk + line	
+		rho_per_site = str(float(lk.split()[4])/(int(geno_position[end])-int(geno_position[start])))
+		print(args.chr+"\t"+str(geno_position[start])+"\t"+str(geno_position[end])+"\t"+str(int(geno_position[end])-int(geno_position[start]))+"\t"+str(lk.split()[4])+"\t"+rho_per_site+"\t"+str(lk.split()[8]))
+		rho_out.write(args.chr+"\t"+str(geno_position[start])+"\t"+str(geno_position[end])+"\t"+str(int(geno_position[end])-int(geno_position[start]))+"\t"+str(lk.split()[4])+"\t"+rho_per_site+"\t"+str(lk.split()[8])+"\n")
 
 		rmin_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "rmin.txt"
 		rmin_png = args.chr + "_" + str(interval_counter) + ".png"
@@ -296,34 +306,43 @@ for interval_index, interval in enumerate(windows):
 
 
 # Create animation of all likelihood plots
-# fig = plt.figure()
-# def animate(interval_counter):
-# 	composite_out = "superscaffold36" + ":" + str(interval_counter) + ".ldhat." + "outfile.txt"
-# 	f = open(composite_out, "r")
-# 	lk = ""
-# 	for line in f:
-# 		if line.startswith("Maximum"):
-# 			line = line.rstrip()
-# 			lk = lk + line
-# 	outfile = pd.read_table(composite_out, \
-# 	skip_blank_lines=True, skipinitialspace=True, sep='\s+',\
-# 	skiprows=lambda x: x in [0, 1, 2, 3, 4, 5])
-# 	x = outfile['4Ner(region)']
-# 	y = outfile['Pairwise']
-# 	plt.cla()
-# 	im = plt.plot(x, y)
-# 	plt.xlabel('4Ner (region)')
-# 	plt.ylabel('Composite-likelihood')
-# 	plt.title(lk)
-# 	return im
+fig = plt.figure()
+def animate(interval_counter):
+	composite_out = "superscaffold36" + ":" + str(interval_counter) + ".ldhat." + "outfile.txt"
+	f = open(composite_out, "r")
+	lk = ""
+	for line in f:
+		if line.startswith("Maximum"):
+			line = line.rstrip()
+			lk = lk + line
+	outfile = pd.read_table(composite_out, \
+	skip_blank_lines=True, skipinitialspace=True, sep='\s+',\
+	skiprows=lambda x: x in [0, 1, 2, 3, 4, 5])
+	rho_table = pd.read_table("rho.txt")
+	pos = list(rho_table['SNP2_pos'] - 3524263)
+	x = outfile['4Ner(region)']
+	y = outfile['Pairwise']
+	plt.cla()
+	im = plt.plot(x, y)
+	plt.xlabel('4Ner (region)')
+	plt.ylabel('Composite-likelihood')
+	plt.title("We are "+str(pos[interval_counter-1])+" bp away from the PAR-nonPAR boundary"+"\n"+lk)
+	return im
 
 
-# ani = matplotlib.animation.FuncAnimation(fig, animate, range(1, 21), repeat=False, interval = 1000)
-# # Set up formatting for the movie files
-# Writer = matplotlib.animation.FFMpegWriter(fps=30, codec='libx264')
-# writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
-# ani.save("ld_images.mp4")
+ani = matplotlib.animation.FuncAnimation(fig, animate, frames=range(1, 101), repeat=False, interval = 500)
+ani.save("ld_images.mp4")
 
 # plt.show()
+
+# Plot rho across all windows
+rho_out.close()
+rho_table = pd.read_table("rho.txt")
+plt.figure()
+mid_point = (rho_table['SNP1_pos'] + rho_table['SNP2_pos'])/2000000
+plt.plot(list(mid_point), [-math.log(rho) for rho in list(rho_table['rho_per_site'])])
+plt.xlabel('Position (Mb)')
+plt.ylabel('4Ner/bp')
+plt.savefig('per_site_rho.png')
 
 
