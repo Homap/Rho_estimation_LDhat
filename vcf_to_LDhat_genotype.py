@@ -9,6 +9,9 @@ import subprocess
 from subprocess import Popen, PIPE, STDOUT
 import pandas as pd
 import matplotlib.pyplot as plt
+import pexpect
+import sys
+from matplotlib.animation import FuncAnimation
 # import seaborn as sns
 
 class RawFormatter(HelpFormatter):
@@ -170,9 +173,30 @@ for interval_index, interval in enumerate(windows):
 
 		print("Running LDhat")
 		ldhat_out = args.chr + ":" + str(interval_counter) + ".ldhat."
-		cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
-		print(cmd)
-		p = subprocess.Popen(cmd).communicate()
+		# cmd = ["./pairwise", "-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out]
+		# # print(cmd)
+		# p = subprocess.Popen(cmd).communicate()
+		ldhat_cmd = pexpect.spawn('./pairwise', ["-seq", sites, "-loc", locs, "-lk", "ostrich_genotypenew_lk.txt", "-prefix", ldhat_out])
+		# # print(sshAP)
+		# sshAP.logfile = sys.stdout#.buffer
+
+		# Add a timeout in case the script fails
+		ldhat_cmd.timeout = 60
+		print("running grid size question")
+		ldhat_cmd.expect('Do you wish to change grid over which to estimate likelihoods')
+		ldhat_cmd.sendline('0')
+
+		print("running sliding window question")
+		ldhat_cmd.expect('Do you wish to carry out a sliding windows analysis')
+		ldhat_cmd.sendline('0')
+
+		print("running rmin full table")
+		ldhat_cmd.expect('Full table')
+		ldhat_cmd.sendline('2')
+
+		print("running 4Ner method of moment question")
+		ldhat_cmd.expect('Estimate 4Ner by moment method')
+		ldhat_cmd.sendline('1')
 
 		print("Plotting Composite-likelihood as a function of 4Ner")
 
@@ -187,6 +211,15 @@ for interval_index, interval in enumerate(windows):
 		plt.xlabel('4Ner (region)')
 		plt.ylabel('Composite-likelihood')
 		plt.savefig(composite_png)
+
+		f = open(composite_out, "r")
+		lk = ""
+		for line in f:
+			if line.startswith("Maximum"):
+				line = line.rstrip()
+				lk = lk + line		
+		print("chr"+"\t"+"SNP1_pos"+"\t"+"SNP2_pos"+"\t"+"rho"+"\t"+"Lk")
+		print(args.chr, geno_position[start], geno_position[end], lk.split()[4], lk.split()[8])
 
 		rmin_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "rmin.txt"
 		rmin_png = args.chr + "_" + str(interval_counter) + ".png"
@@ -228,39 +261,69 @@ for interval_index, interval in enumerate(windows):
 				pairwise_rmin_out_file.write(args.chr+"\t"+snp1+"\t"+snp2+"\t"+snp1_original_pos+"\t"+snp2_original_pos+"\t"+str(mat[snppair])+"\n")
 				geno_position[start:end]
 
-		window_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "window_out.txt"
-		window_png = args.chr + ":" + str(interval_counter) + ".window.png"
-		window_txt = args.chr + ":" + str(interval_counter) + ".originalPOS.window.txt"
-		with open(window_out, 'r') as w_file:
-			w = pd.read_table(w_file, \
-				skip_blank_lines=True, sep ="\t", skipinitialspace=True, \
-				skiprows=lambda x: x in [0, 1, 2])
+		# window_out = args.chr + ":" + str(interval_counter) + ".ldhat." + "window_out.txt"
+		# window_png = args.chr + ":" + str(interval_counter) + ".window.png"
+		# window_txt = args.chr + ":" + str(interval_counter) + ".originalPOS.window.txt"
+		# with open(window_out, 'r') as w_file:
+		# 	w = pd.read_table(w_file, \
+		# 		skip_blank_lines=True, sep ="\t", skipinitialspace=True, \
+		# 		skiprows=lambda x: x in [0, 1, 2])
 
-			w_no_na = w.dropna()
+		# 	w_no_na = w.dropna()
 
-			mid_position = (w_no_na["SNP_L"].astype(float)+w_no_na["SNP_R"])/2
-			mid = mid_position/1000
-			rho = w_no_na["4Ner/bp/kb"]
+		# 	mid_position = (w_no_na["SNP_L"].astype(float)+w_no_na["SNP_R"])/2
+		# 	mid = mid_position/1000
+		# 	rho = w_no_na["4Ner/bp/kb"]
 
-			plt.figure()
-			plt.plot(mid, rho*1000)
-			plt.ylabel("4Ner/kb")
-			plt.xlabel("Position (kb)")
-			plt.savefig(window_png)
+		# 	plt.figure()
+		# 	plt.plot(mid, rho*1000)
+		# 	plt.ylabel("4Ner/kb")
+		# 	plt.xlabel("Position (kb)")
+		# 	plt.savefig(window_png)
 
-			# Create a dictionary with new and original coordinates
-			new_coord_to_original = dict(zip(new_coord, geno_position))
+		# 	# Create a dictionary with new and original coordinates
+		# 	new_coord_to_original = dict(zip(new_coord, geno_position))
 
-			original_snp_l = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_L"])]
-			original_snp_r = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_R"])]
+		# 	original_snp_l = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_L"])]
+		# 	original_snp_r = [new_coord_to_original[str(int(float(item)))] for index, item in enumerate(w_no_na["SNP_R"])]
 
-			w_no_na.insert(1, "SNP_L_POS", original_snp_l, True)
-			w_no_na.insert(3, "SNP_R_POS", original_snp_r, True)
+		# 	w_no_na.insert(1, "SNP_L_POS", original_snp_l, True)
+		# 	w_no_na.insert(3, "SNP_R_POS", original_snp_r, True)
 
-			# Saving dataframe as CSV
-			#with open(window_txt, "w") as df_out:
-			w_no_na.to_csv(window_txt, sep="\t", index = False)
+		# 	# Saving dataframe as CSV
+		# 	#with open(window_txt, "w") as df_out:
+		# 	w_no_na.to_csv(window_txt, sep="\t", index = False)
 
 
+# Create animation of all likelihood plots
+# fig = plt.figure()
+# def animate(interval_counter):
+# 	composite_out = "superscaffold36" + ":" + str(interval_counter) + ".ldhat." + "outfile.txt"
+# 	f = open(composite_out, "r")
+# 	lk = ""
+# 	for line in f:
+# 		if line.startswith("Maximum"):
+# 			line = line.rstrip()
+# 			lk = lk + line
+# 	outfile = pd.read_table(composite_out, \
+# 	skip_blank_lines=True, skipinitialspace=True, sep='\s+',\
+# 	skiprows=lambda x: x in [0, 1, 2, 3, 4, 5])
+# 	x = outfile['4Ner(region)']
+# 	y = outfile['Pairwise']
+# 	plt.cla()
+# 	im = plt.plot(x, y)
+# 	plt.xlabel('4Ner (region)')
+# 	plt.ylabel('Composite-likelihood')
+# 	plt.title(lk)
+# 	return im
+
+
+# ani = matplotlib.animation.FuncAnimation(fig, animate, range(1, 21), repeat=False, interval = 1000)
+# # Set up formatting for the movie files
+# Writer = matplotlib.animation.FFMpegWriter(fps=30, codec='libx264')
+# writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+# ani.save("ld_images.mp4")
+
+# plt.show()
 
 
